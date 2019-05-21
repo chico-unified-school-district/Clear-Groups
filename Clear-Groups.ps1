@@ -30,7 +30,7 @@ function Clear-Groups {
   if ( Test-Connection -ComputerName $DomainController) { 
    $adCmdLets = 'Get-ADGroupMember', 'Remove-ADGroupMember'
    $adSession = New-PSSession -ComputerName $DomainController -Credential $Credential
-   Import-PSSession -Session $adSession -Module ActiveDirectory -CommandName $adCmdLets -AllowClobber
+   Import-PSSession -Session $adSession -Module ActiveDirectory -CommandName $adCmdLets -AllowClobber > $null
   }
   else {
 
