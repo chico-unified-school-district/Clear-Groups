@@ -1,6 +1,6 @@
 <# 
 .SYNOPSIS
- This function takes a group name, lists all current members, and removed the members from the supplied group name. . 
+ This function takes a group name, lists all current members, and removed the members from the supplied group name. 
 .DESCRIPTION
  A group or array of group names is operated on. Each group named will have all of its members removed from the group.
 .EXAMPLE
