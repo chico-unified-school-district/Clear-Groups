@@ -1,59 +1,70 @@
-<# 
-.SYNOPSIS
-This function takes an Active Directory group name, lists all current members, and removed the members from the supplied group name.
-.DESCRIPTION
- A group or array of group names is operated on. Each group named will have all of its members removed from the group.
-.EXAMPLE
- Clear-Groups -DomainController MyDC.mydomain -Groups Temp-Group1,Temp-Group2
-.INPUTS
-.OUTPUTS
-.NOTES
-#>
-function Clear-Groups {
- [cmdletbinding()]
- param ( 
-  [Parameter(Position = 0, Mandatory = $True)]
-  [Alias('DC')]
-  [string]$DomainController,
-  [Parameter(Position = 1, Mandatory = $True)]
-  [Alias('ADCred')]
-  [System.Management.Automation.PSCredential]$Credential,
-  [Parameter(Position = 2, Mandatory = $True)]
-  [string[]]$Groups,
-  [Parameter(Position = 3, Mandatory = $false)]
-  [SWITCH]$WhatIf
- )
- 
- Begin {
-  . .\lib\Add-Log.ps1
+[cmdletbinding()]
+param (
+ [Parameter(Position = 0, Mandatory = $True)]
+ [Alias('DCs')]
+ [string[]]$DomainControllers,
+ [Parameter(Position = 1, Mandatory = $True)]
+ [Alias('ADCred')]
+ [System.Management.Automation.PSCredential]$Credential,
+ [Parameter(Position = 2, Mandatory = $True)]
+ [string[]]$Groups,
+ [Parameter(Position = 3, Mandatory = $false)]
+ [Alias('wi')]
+ [SWITCH]$WhatIf
+)
 
-  if ( Test-Connection -ComputerName $DomainController) { 
-   $adCmdLets = 'Get-ADGroupMember', 'Remove-ADGroupMember'
-   $adSession = New-PSSession -ComputerName $DomainController -Credential $Credential
-   Import-PSSession -Session $adSession -Module ActiveDirectory -CommandName $adCmdLets -AllowClobber > $null
+function New-ADSession ($dcs) {
+ Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.Name, ($dcs -join ','))
+ $dc = Select-DomainController $dcs
+ $adCmdLets = 'Get-ADGroupMember', 'Remove-ADGroupMember'
+ $adSession = New-PSSession -ComputerName $dc -Credential $Credential
+ Import-PSSession -Session $adSession -Module ActiveDirectory -CommandName $adCmdLets -AllowClobber | Out-Null
+}
+
+function Get-GroupObj {
+ process {
+  Write-Host ('{0},{1},Finding Group...' -f $MyInvocation.MyCommand.Name, $_)
+  $group = Get-ADGroup -Identity $_
+  if ($group) {
+   Write-Host ('{0},{1},Group Found' -f $MyInvocation.MyCommand.Name, $_)
+   $group
   }
   else {
-
+   Write-Host ('{0},{1},Group not found.' -f $MyInvocation.MyCommand.Name, $_)
   }
  }
- Process {
-  foreach ($group in $Groups) {
-   # BEGIN PROCESS GROUPS
-   Write-Verbose $group
-   $members = (Get-ADGroupMember -Identity $group).SamAccountName
+}
 
-   if (!$members) { "No members in $group."; continue }
-
-   foreach ($sam in $members) {
-    Add-Log remove "$group,$sam,member"
-   }
-   Remove-ADGroupMember -Identity $group -Members $members -Confirm:$false -WhatIf:$WhatIf
-  } # END PROCESS GROUPS
+function Get-GroupObjMember {
+ process {
+  $members = Get-ADGroupMember -Identity $_.ObjectGUID
+  if (-not$members){ return }
+  foreach ($user in $members) {
+   New-MemberObj -group $_ -member $user.samAccountName
+  }
  }
+}
 
- End {
-  'Tearing down sessions...'
-  Get-PSSession | Remove-PSSession -WhatIf:$false
+function New-MemberObj($group, $member) {
+ [PSCustomObject]@{
+  group  = $group
+  member = $member
  }
+}
 
-} # END
+function Remove-GroupMember{
+ process{
+  $msgVars =$MyInvocation.MyCommand.Name, $_.group.name.ToUpper(), $_.member
+  Write-Host ('{0},[{1}],[{2}]' -f $msgVars)
+  Remove-ADGroupMember -Identity $_.group.ObjectGUID -member $_.member -Confirm:$false -WhatIf:$WhatIf
+ }
+}
+
+. .\lib\Clear-SessionData.ps1
+. .\lib\Select-DomainController.ps1
+. .\lib\Show-TestRun.ps1
+
+Show-TestRun
+Clear-SessionData
+New-ADSession $DomainControllers
+$Groups | Get-GroupObj | Get-GroupObjMember | Remove-GroupMember
