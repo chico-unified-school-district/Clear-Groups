@@ -16,7 +16,7 @@ param (
 function New-ADSession ($dcs) {
  Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.Name, ($dcs -join ','))
  $dc = Select-DomainController $dcs
- $adCmdLets = 'Get-ADGroupMember', 'Remove-ADGroupMember'
+ $adCmdLets = 'Get-ADGroup', 'Get-ADGroupMember', 'Remove-ADGroupMember'
  $adSession = New-PSSession -ComputerName $dc -Credential $Credential
  Import-PSSession -Session $adSession -Module ActiveDirectory -CommandName $adCmdLets -AllowClobber | Out-Null
 }
@@ -38,7 +38,7 @@ function Get-GroupObj {
 function Get-GroupObjMember {
  process {
   $members = Get-ADGroupMember -Identity $_.ObjectGUID
-  if (-not$members){ return }
+  if (-not$members) { return }
   foreach ($user in $members) {
    New-MemberObj -group $_ -member $user.samAccountName
   }
@@ -52,9 +52,9 @@ function New-MemberObj($group, $member) {
  }
 }
 
-function Remove-GroupMember{
- process{
-  $msgVars =$MyInvocation.MyCommand.Name, $_.group.name.ToUpper(), $_.member
+function Remove-GroupMember {
+ process {
+  $msgVars = $MyInvocation.MyCommand.Name, $_.group.name.ToUpper(), $_.member
   Write-Host ('{0},[{1}],[{2}]' -f $msgVars)
   Remove-ADGroupMember -Identity $_.group.ObjectGUID -member $_.member -Confirm:$false -WhatIf:$WhatIf
  }
